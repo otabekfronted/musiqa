@@ -4,11 +4,12 @@ import http from "../axios";
 import { GrPrevious, GrNext } from "react-icons/gr";
 import {
     FaRegHeart,
+    FaHeart,
     FaRegArrowAltCircleDown,
     FaEllipsisH,
     FaSearch,
 } from "react-icons/fa";
-import { FaPlayCircle } from "react-icons/fa";
+import { FaPlayCircle, FaPauseCircle } from "react-icons/fa";
 import { AiOutlineDown } from "react-icons/ai";
 import { CiClock2 } from "react-icons/ci";
 
@@ -20,19 +21,36 @@ const Details = () => {
     const [tracks, setTracks] = useState([]);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTrack, setCurrentTrack] = useState(null);
-    const [volume, setVolume] = useState(1); // default volume
+    const [audio, setAudio] = useState(null);
+    const [likedTracks, setLikedTracks] = useState([]);
 
-    const handlePlayPause = (track) => {
-        if (currentTrack?.track.id === track.track.id && isPlaying) {
-            setIsPlaying(false);
-        } else {
-            setCurrentTrack(track);
-            setIsPlaying(true);
-        }
+    const handleLike = (track) => {
+        const trackId = track.track.id;
+        const updatedLikes = likedTracks.includes(trackId)
+            ? likedTracks.filter((id) => id !== trackId)
+            : [...likedTracks, trackId];
+
+        setLikedTracks(updatedLikes);
+        localStorage.setItem("likedTracks", JSON.stringify(updatedLikes));
     };
 
-    const handleVolumeChange = (event) => {
-        setVolume(event.target.value);
+    const playTrack = (track) => {
+        if (audio) {
+            audio.pause();
+        }
+        const newAudio = new Audio(track.track.preview_url);
+        setAudio(newAudio);
+        setCurrentTrack(track);
+        newAudio.play();
+        setIsPlaying(true);
+        newAudio.onended = () => handleNext();
+    };
+
+    const pauseTrack = () => {
+        if (audio) {
+            audio.pause();
+            setIsPlaying(false);
+        }
     };
 
     const handlePrevious = () => {
@@ -41,8 +59,7 @@ const Details = () => {
         );
         const prevTrack = tracks[currentIndex - 1];
         if (prevTrack) {
-            setCurrentTrack(prevTrack);
-            setIsPlaying(true);
+            playTrack(prevTrack);
         }
     };
 
@@ -52,8 +69,7 @@ const Details = () => {
         );
         const nextTrack = tracks[currentIndex + 1];
         if (nextTrack) {
-            setCurrentTrack(nextTrack);
-            setIsPlaying(true);
+            playTrack(nextTrack);
         }
     };
 
@@ -74,6 +90,20 @@ const Details = () => {
         };
         fetchPlaylistData();
     }, [id]);
+
+    useEffect(() => {
+        const savedLikes =
+            JSON.parse(localStorage.getItem("likedTracks")) || [];
+        setLikedTracks(savedLikes);
+    }, []);
+
+    const formatDuration = (durationMs) => {
+        const minutes = Math.floor(durationMs / 60000);
+        const seconds = Math.floor((durationMs % 60000) / 1000)
+            .toString()
+            .padStart(2, "0");
+        return `${minutes}:${seconds}`;
+    };
 
     if (loading) {
         return (
@@ -97,14 +127,24 @@ const Details = () => {
             <div className="flex gap-4 p-7 bg-[#c4ff00]">
                 <GrPrevious
                     onClick={handlePrevious}
-                    className="w-10 h-10 py-2 px-3 text-white bg-[#000] rounded-full"
+                    className="w-10 h-10 text-white bg-[#000] rounded-full"
                 />
+                {isPlaying ? (
+                    <FaPauseCircle
+                        onClick={pauseTrack}
+                        className="w-10 h-10 text-white bg-[#000] rounded-full"
+                    />
+                ) : (
+                    <FaPlayCircle
+                        onClick={() => playTrack(currentTrack || tracks[0])}
+                        className="w-10 h-10 text-white bg-[#000] rounded-full"
+                    />
+                )}
                 <GrNext
                     onClick={handleNext}
-                    className="w-10 h-10 py-2 px-3 text-white bg-[#000] rounded-full"
+                    className="w-10 h-10 text-white bg-[#000] rounded-full"
                 />
             </div>
-
             <div className="flex items-center p-7 bg-gradient-to-b from-[#c4ff00] to-[#111] text-white">
                 <img
                     className="w-[297px] h-[297px] shadow-lg"
@@ -123,28 +163,8 @@ const Details = () => {
                     </p>
                     <p className="text-gray-400">
                         {playlistData.owner.display_name} •{" "}
-                        {playlistData.tracks.total} songs,{" "}
-                        {Math.floor(playlistData.tracks.total * 3.5)} mins
+                        {playlistData.tracks.total} songs
                     </p>
-                </div>
-            </div>
-
-            <div className="flex items-center justify-between px-7 bg-[#121212]">
-                <div className="flex items-center gap-9">
-                    <FaPlayCircle
-                        onClick={() => handlePlayPause(tracks[0])}
-                        className="w-20 h-20 bg-[#65D36E] text-white rounded-full"
-                    />
-                    <FaRegHeart className="text-white w-12 h-12" />
-                    <FaRegArrowAltCircleDown className="text-white w-12 h-12" />
-                    <FaEllipsisH className="text-white w-6 h-6" />
-                </div>
-                <div className="flex items-center text-white font-semibold gap-11">
-                    <FaSearch className="w-6 h-6" />
-                    <div className="flex items-center text-white text-sm font-semibold">
-                        <span className="text-[18px]">Custom order</span>
-                        <AiOutlineDown className="ml-1" />
-                    </div>
                 </div>
             </div>
 
@@ -162,21 +182,16 @@ const Details = () => {
                         <div
                             key={index}
                             className="flex items-center justify-between p-4 border-b border-gray-500 cursor-pointer"
+                            onClick={() => playTrack(track)}
                         >
-                            <span
-                                onClick={() => handlePlayPause(track)}
-                                className="text-white flex items-center gap-2"
-                            >
+                            <span className="flex items-center gap-2 text-white">
                                 {index + 1}
                                 <img
                                     className="w-10 h-10 mr-4"
                                     src={track.track.album.images[0]?.url}
                                     alt={track.track.album.name}
                                 />
-                                {track.track.name} <br />
-                                {track.track.artists
-                                    .map((artist) => artist.name)
-                                    .join(", ")}
+                                {track.track.name}
                             </span>
                             <span className="text-white">
                                 {track.track.artists
@@ -187,55 +202,22 @@ const Details = () => {
                                 {track.track.album.name}
                             </span>
                             <span className="text-gray-400">
-                                {Math.floor(track.track.duration_ms / 60000)}:
-                                {Math.floor(
-                                    (track.track.duration_ms % 60000) / 1000
-                                )
-                                    .toString()
-                                    .padStart(2, "0")}
+                                {formatDuration(track.track.duration_ms)}
+                            </span>
+                            <span
+                                onClick={() => handleLike(track)}
+                                className="cursor-pointer"
+                            >
+                                {likedTracks.includes(track.track.id) ? (
+                                    <FaHeart className="text-red-500" />
+                                ) : (
+                                    <FaRegHeart className="text-white" />
+                                )}
                             </span>
                         </div>
                     ))}
                 </div>
             </div>
-
-            {isPlaying && (
-                <div className="footer bg-[#121212] text-white p-6 fixed bottom-0 w-full flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <FaPlayCircle
-                            onClick={() => setIsPlaying(false)}
-                            className="w-10 h-10 text-white"
-                        />
-                        <span className="text-white">
-                            {currentTrack.track.name}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button onClick={handlePrevious} className="text-white">
-                            Previous
-                        </button>
-                        <button onClick={handleNext} className="text-white">
-                            Next
-                        </button>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            value={volume}
-                            onChange={handleVolumeChange}
-                            className="w-32"
-                        />
-                        <audio
-                            src={currentTrack.track.preview_url}
-                            autoPlay
-                            volume={volume}
-                            onEnded={() => setIsPlaying(false)}
-                        />
-                    </div>
-                </div>
-            )}
-            {/* <Footer currentTrack={currentTrack} /> */}
         </div>
     );
 };
